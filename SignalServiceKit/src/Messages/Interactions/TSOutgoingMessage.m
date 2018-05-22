@@ -58,6 +58,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
 @interface TSOutgoingMessageRecipientState ()
 
 @property (atomic) OWSOutgoingMessageRecipientState state;
+@property (atomic) BOOL wasDelivered;
 @property (atomic, nullable) NSNumber *deliveryTimestamp;
 @property (atomic, nullable) NSNumber *readTimestamp;
 
@@ -99,6 +100,15 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
         if (!self.recipientStateMap) {
             [self migrateRecipientStateMapWithCoder:coder];
             OWSAssert(self.recipientStateMap);
+        } else {
+            NSNumber *_Nullable wasDelivered = [coder decodeObjectForKey:@"wasDelivered"];
+            if (wasDelivered && wasDelivered.boolValue) {
+                for (TSOutgoingMessageRecipientState *recipientState in self.recipientStateMap.allValues) {
+                    if (recipientState.state == OWSOutgoingMessageRecipientStateSent) {
+                        recipientState.wasDelivered = YES;
+                    }
+                }
+            }
         }
     }
 
@@ -138,6 +148,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
         [coder decodeObjectForKey:@"recipientDeliveryMap"];
     NSDictionary<NSString *, NSNumber *> *_Nullable recipientReadMap = [coder decodeObjectForKey:@"recipientReadMap"];
     NSArray<NSString *> *_Nullable sentRecipients = [coder decodeObjectForKey:@"sentRecipients"];
+    NSNumber *_Nullable wasDelivered = [coder decodeObjectForKey:@"wasDelivered"];
 
     NSMutableDictionary<NSString *, TSOutgoingMessageRecipientState *> *recipientStateMap = [NSMutableDictionary new];
     // Our default recipient list is the current thread members.
@@ -152,8 +163,10 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
         recipientIds = [[self threadWithTransaction:transaction] recipientIdentifiers];
     }];
     if (sentRecipients) {
-        // If we have a `sentRecipients` list, prefer that as it is more accurate.
-        recipientIds = sentRecipients;
+        NSMutableSet<NSString *> *allRecipients = [NSMutableSet new];
+        [allRecipients addObjectsFromArray:recipientIds];
+        [allRecipients addObjectsFromArray:sentRecipients];
+        recipientIds = allRecipients.allObjects;
     }
     NSString *_Nullable singleGroupRecipient = [coder decodeObjectForKey:@"singleGroupRecipient"];
     if (singleGroupRecipient) {
@@ -175,10 +188,15 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
             recipientState.readTimestamp = readTimestamp;
             // deliveryTimestamp might be nil here.
             recipientState.deliveryTimestamp = deliveryTimestamp;
+            recipientState.wasDelivered = YES;
         } else if (deliveryTimestamp) {
             // If we have a delivery timestamp for this recipient, mark it as delivered.
             recipientState.state = OWSOutgoingMessageRecipientStateSent;
             recipientState.deliveryTimestamp = deliveryTimestamp;
+            recipientState.wasDelivered = YES;
+        } else if (wasDelivered && wasDelivered.boolValue) {
+            recipientState.state = OWSOutgoingMessageRecipientStateSent;
+            recipientState.wasDelivered = YES;
         } else if ([sentRecipients containsObject:recipientId]) {
             // If this recipient is in `sentRecipients`, mark it as sent.
             recipientState.state = OWSOutgoingMessageRecipientStateSent;
@@ -439,7 +457,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     NSMutableArray<NSString *> *result = [NSMutableArray new];
     for (NSString *recipientId in self.recipientStateMap) {
         TSOutgoingMessageRecipientState *recipientState = self.recipientStateMap[recipientId];
-        if (recipientState.deliveryTimestamp != nil) {
+        if (recipientState.wasDelivered || recipientState.deliveryTimestamp != nil) {
             [result addObject:recipientId];
         }
     }
@@ -619,6 +637,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
                                  }
                                  recipientState.state = OWSOutgoingMessageRecipientStateSent;
                                  recipientState.deliveryTimestamp = deliveryTimestamp;
+                                 recipientState.wasDelivered = YES;
                              }];
 }
 

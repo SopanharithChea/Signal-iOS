@@ -97,6 +97,11 @@ public class MessageRecipientStatusUtils: NSObject {
                                                           comment: "message status for message delivered to their recipient.").rtlSafeAppend(" ", referenceView: referenceView)
                     .rtlSafeAppend(timestampString, referenceView: referenceView)
                 return (status:.delivered, shortStatusMessage:shortStatusMessage, longStatusMessage:longStatusMessage)
+            } else if recipientState.wasDelivered {
+                let shortStatusMessage = NSLocalizedString("MESSAGE_STATUS_DELIVERED",
+                                                           comment: "message status for message delivered to their recipient.")
+                let longStatusMessage = shortStatusMessage
+                return (status:.delivered, shortStatusMessage:shortStatusMessage, longStatusMessage:longStatusMessage)
             }
             let statusMessage =
                 NSLocalizedString("MESSAGE_STATUS_SENT",

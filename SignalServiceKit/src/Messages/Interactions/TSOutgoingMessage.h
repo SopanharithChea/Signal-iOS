@@ -58,6 +58,8 @@ typedef NS_ENUM(NSInteger, TSGroupMetaMessage) {
 
 @property (atomic, readonly) OWSOutgoingMessageRecipientState state;
 // This property should only be set if state == .sent.
+@property (atomic, readonly) BOOL wasDelivered;
+// This property should only be set if state == .sent.
 @property (atomic, nullable, readonly) NSNumber *deliveryTimestamp;
 // This property should only be set if state == .sent.
 @property (atomic, nullable, readonly) NSNumber *readTimestamp;
